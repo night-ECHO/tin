@@ -1,0 +1,200 @@
+using Test_Online.Database.DbModels;
+using Test_Online.Models;
+using Test_Online.Coder;
+using System.Net;
+ 
+namespace Test_Online.Controllers
+{
+    
+    public class UserController : Controller
+    {
+        [HttpPost]
+        public JsonResult Login(UserLoginModel Usr)
+        {
+            string mess = "";
+            if (!ModelState.IsValid)
+            {
+                foreach (ModelState StError in ModelState.Values)
+                    foreach (ModelError mer in StError.Errors)
+                        mess += "<li>" + mer.ErrorMessage + "</li>";
+                return Json(new { status = false, mess = mess });
+            }
+            var tbu = new tblUser_Db();
+            UserSession ret = tbu.Login(Usr.Uid, Usr.Pwd);
+            if(ret==null)
+                return Json(new { status = false, mess = "<li>Tên tài khoản hoặc mật khẩu không đúng kiểm tra lại</li>" });
+            if(!tbu.IsActive(ret.ID))
+                return Json(new { status = false, mess = "<li>Tài khoản chưa được kích hoạt, kiểm tra email đăng kí và kích hoạt tài khoản để sử dụng.</li>" });
+            SessionHelper.SetUserSession(ret);
+            return Json(new { status = true, mess = ret });
+        }
+        public ActionResult Logout()
+        {
+            SessionHelper.RemoveUserSession();
+            TSession.RemoveSession("HocSinh_KiThi");
+            TSession.RemoveSession("ListCauHoi");
+            TSession.RemoveSession("IDKiThi");
+            return RedirectToAction("index", "home");
+        }
+        [HttpPost]
+        public ActionResult EditProfile(UserEditProfileModel usr)
+        {
+            string mess = "";
+            if (!ModelState.IsValid)
+            {
+                foreach (ModelState StError in ModelState.Values)
+                    foreach (ModelError mer in StError.Errors)
+                        mess += "<li>" + mer.ErrorMessage + "</li>";
+                return Json(new { status = false, data = mess });
+            }
+            var uol = SessionHelper.GetUserSession();
+            if (uol == null) return RedirectToAction("index", "home");
+ 
+            if (usr.Object == 2)
+                if (usr.Specialize == null)
+                    return Json(new { status = false, data = "<li>Chưa chọn môn dạy cho tài khoản giáo viên.</ li >" });
+                else usr.Specialize = usr.Specialize.Substring(0, usr.Specialize.Length - 1);
+            
+            byte[] img = null;
+            if (usr.img != null)
+                img = Convert.FromBase64String(TString.Split(usr.img, ",")[1]);
+            mess = new tblUser_Db().Update(new tblUser()
+            {
+                Active = false,
+                Email = "",
+                ID = 0,
+                img = img,
+                Name = usr.Name,
+                School = usr.School,
+                Object = usr.Object,
+                Phone = usr.Phone,
+                Point = 0,
+                pwd = usr.pwd,
+                Sort = TSapxep.IDSort(usr.Name),
+                Specialize = usr.Specialize,
+                uid = usr.uid
+            });
+            if(mess!="") return Json(new { status = false, data = mess });
+            uol.Img = img;
+            uol.Name = usr.Name;
+            uol.School = usr.School;
+            uol.Phone = usr.Phone;
+            uol.Specialize = usr.Specialize;
+            uol.Sort = TSapxep.IDSort(usr.Name);
+            SessionHelper.SetUserSession(uol);
+            return Json(new { status = true, data = "" });
+        }
+        [HttpPost]
+        public JsonResult Register(UserRegisterModel usr)
+        {
+            string mess = "";
+            if (!ModelState.IsValid)
+            {
+                foreach (ModelState StError in ModelState.Values)
+                    foreach (ModelError mer in StError.Errors)
+                        mess += "<li>" + mer.ErrorMessage + "</li>";
+                return Json(new { status = false, data = mess });
+            }
+            if (usr.Object == 2)
+                if (usr.Specialize == null)
+                    return Json(new { status = false, data = "<li>Chưa chọn môn dạy cho tài khoản giáo viên.</ li >" });
+                else usr.Specialize = usr.Specialize.Substring(0, usr.Specialize.Length - 1);
+            byte[] img = null;
+            if (usr.img != null)
+                img = Convert.FromBase64String(TString.Split(usr.img, ",")[1]);
+ 
+            mess = new tblUser_Db().Add(new tblUser() {
+                Active = false,
+                Email = usr.Email,
+                ID = 0,
+                img = img,
+                Name = usr.Name,
+                School = usr.School,
+                Object = usr.Object,
+                Phone = usr.Phone,
+                Point = 0,
+                pwd = usr.pwd,
+                Sort = TSapxep.IDSort(usr.Name),
+                Specialize = usr.Specialize,
+                uid = usr.uid
+            });
+            var id = long.Parse(mess);
+            if (id > 0)
+            {
+                var website = Request.Url.Scheme + "://" + Request.Url.Host + ((Request.Url.Port != 80) ? ":" + Request.Url.Port.ToString() : "");
+                mess = TCipher.Encrypt(DateTime.Now.ToString("yyyyMMdd") + TString.space(14 - mess.Length) + mess, TGlobal.NtcPwd);
+                mess = website  + "/user/active?code=" + WebUtility.UrlEncode(mess);
+ 
+                var body = "<html><head></head><body><h1 style='text-align: center;'><span style='color: #0000ff;'><strong>NGÂN HÀNG ĐỀ THI TRỰC TUYẾN</strong></span></h1>" +
+                           "<p style = 'text-align: justify; padding-left: 30px;' > Bạn đã đăng kí tài khoản<span " + 
+                           "style = 'color: #ff0000;' ><strong> " + usr.uid + " </strong> </span> tại website: <span style = 'color: #0000ff;'> " + 
+                           website + " </span>. Bạn có thời gian <strong> 5 </strong> ngày để kích hoạt tài khoản. Hãy "+ 
+                           " nhấn vào địa chỉ liên kết sau:" + mess + "</p> </body><html>";
+ 
+                TGlobal.SendEmail(usr.Email, "Kích hoạt tài khoản", body, true);
+                return Json(new { status = true, data = "" });
+            }
+            return Json(new { status = false, data = mess });
+        }
+        public ActionResult Active(string code)
+        {
+            code = TCipher.Decrypt(code, TGlobal.NtcPwd);
+            if (code != "")
+            {
+                var IDUser = long.Parse(code.Substring(8));
+                var day = new DateTime(int.Parse(code.Substring(0, 4)), int.Parse(code.Substring(4, 2)), int.Parse(code.Substring(6, 2)));
+                ViewBag.message = "";
+                if ((DateTime.Now - day).Days > 5)
+                    ViewBag.message = "Quá thời gian kích hoạt tài khoản, tài khoản không thể hoạt động.";
+                else
+                    ViewBag.message = new tblUser_Db().Active(IDUser);
+            }
+            else ViewBag.message = "Mã kích hoạt không đúng.";
+            return View();
+        }
+        [HttpPost]
+        public JsonResult ForgetPassword(string Email)
+        {
+            string uid, pwd; 
+            var ret = new tblUser_Db().GetPassWord(Email,out uid, out pwd);
+            if(!ret) return Json(new { status = false, mess = "<li>Địa chỉ email không tồn tại, kiểm tra lại địa chỉ email.</li>" });
+            var website = Request.Url.Scheme + "://" + Request.Url.Host + ((Request.Url.Port != 80) ? ":" + Request.Url.Port.ToString() : "");
+            string Body = "<h1 style='text-align: center;'><span style='color: blue;'><strong>CẤP LẠI MẬT KHẨU</strong></span></h1>" +
+                          "<p> Ai đó tại website: <span style='color:red;'><strong>{0}</strong></span> yêu cầu cấp lại mật khẩu của " +
+                          "tài khoản: <span style='color:red;'><strong>{1}</strong></span>, nên bạn nhận được email này. Mật khẩu " +
+                          "của tài khoản: <span style='color:red;'><strong>{1}</strong></span> là: <span style='color:blue;'><str" +
+                          "ong>{2}</strong></span>. Hãy thận trọng bảo vệ tài khoản của mình. Bạn hãy đổi mật khẩu tài khoản của ban.</p>";
+            Body = String.Format(Body,website, uid, pwd);
+            TGlobal.SendEmail(Email, "Cấp lại mật khẩu", Body,true);
+            return Json(new { status = true, mess = "" });
+        }
+        public ActionResult ViewProfile()
+        {
+            var usr = SessionHelper.GetUserSession();
+            if (usr == null) return RedirectToAction("index", "home");
+            return View(usr);
+        }
+        [HttpPost]
+        public ActionResult ChangePassword(UserChangePasswordModel cpw)
+        {
+            var usr = SessionHelper.GetUserSession();
+            if (usr == null) return RedirectToAction("index", "home");
+            string mess = "";
+            if (!ModelState.IsValid)
+            {
+                foreach (ModelState StError in ModelState.Values)
+                    foreach (ModelError mer in StError.Errors)
+                        mess += "<li>" + mer.ErrorMessage + "</li>";
+            }
+            if(cpw.NewPwd!=cpw.ReNewPwd)
+                mess+= "<li>Xác nhận lại mật khẩu không đúng.</li>";
+            if(mess!="") return Json(new { status = false, mess = mess });
+            var ret = new tblUser_Db().ChangePassword(usr.Uid, cpw.OldPwd, cpw.NewPwd);
+            if(ret!=0) return Json(new { status = false, mess = "<li>Mật khẩu hiện tại của tài khoản không đúng, nhập lại mật khẩu hiện tại</li>" });
+            usr.Pwd = TCipher.Encrypt(cpw.NewPwd, TGlobal.NtcPwd);
+            SessionHelper.SetUserSession(usr);
+            return Json(new { status = true, mess = "" });
+        }
+    }
+}
+ 
