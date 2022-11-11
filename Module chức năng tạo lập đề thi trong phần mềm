@@ -1,0 +1,120 @@
+using BankQuestion.Class;
+using System.Windows.Forms;
+using System.Data;
+using System;
+
+
+namespace BankQuestion.Forms
+{
+    public partial class FrmExam : NTCFormBaseDataEvent
+    {
+        public FrmExam()
+        {
+            InitializeComponent();
+        }
+        private string TenMonHoc(string IDMonHoc)
+        {
+            string PostData = "IDMonHoc=" + IDMonHoc;
+            var js = new TWebsite().GetData("WinApp/TenMonHoc", PostData);
+            if(js!=null)
+            {
+                if(js.status) return js.data;
+            }
+            return "";
+        }
+        public override void FormatGrid()
+        {
+            base.FormatGrid();
+            if (Viewer.Cols.Count == 0)
+                return;
+            Viewer.Cols["ID"].Visible = false;
+            Viewer.Cols["TenMon"].Caption = "Tên môn";
+            Viewer.Cols["TenMon"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.LeftCenter;
+            Viewer.Cols["Lop"].Caption = "Khối";
+            Viewer.Cols["Lop"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.RightCenter;
+            Viewer.Cols["TieuDe"].Caption = "Tên kì thi";
+            Viewer.Cols["TieuDe"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.LeftCenter;
+            Viewer.Cols["NgayLap"].Caption = "Ngày lập";
+            Viewer.Cols["NgayLap"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.CenterCenter;
+            Viewer.Cols["ThoiGian"].Caption = "Thời gian làm bài";
+            Viewer.Cols["ThoiGian"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.RightCenter;
+            Viewer.Cols["SoCau"].Caption = "Số câu";
+            Viewer.Cols["SoCau"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.RightCenter;
+            Viewer.Cols["ThiLai"].Caption = "Làm lại";
+            Viewer.Cols["ThiLai"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.RightCenter;
+            Viewer.Cols["ThiLai"].DataType = typeof(bool);
+            Viewer.Cols["HoatDong"].Caption = "Hoạt động";
+            Viewer.Cols["HoatDong"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.RightCenter;
+            Viewer.Cols["HoatDong"].DataType = typeof(bool);
+            Viewer.Cols["Diem"].Caption = "Điểm";
+            Viewer.Cols["Diem"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.RightCenter;
+            var colw = new int[] { 44, 69, 45, 708, 82, 120, 60, 56, 79, 52, 36 };
+            for (int i = 0; i < colw.Length; i++)
+                if (i != Viewer.Cols["TieuDe"].Index) Viewer.Cols[i].Width = colw[i];
+                else continue;
+        }
+        public override void GrdResize()
+        {
+            base.GrdResize();
+            if (Viewer.Width > 610 && Viewer.Cols.Count > 0) Viewer.Cols["TieuDe"].Width = Viewer.Width - 610;
+        }
+        public override void System_Add_Object(object obj)
+        {
+            base.System_Add_Object(obj);
+            if(obj is TKiThi )
+            {
+                if(Viewer.Cols.Count>0)
+                {
+                    var tb = (DataTable)Viewer.DataSource;
+                    var row = tb.NewRow();
+                    var kithi = (TKiThi)obj;
+                    row["STT"] = Viewer.Rows.Count;
+                    row["ID"] = kithi.ID ;
+                    row["TenMon"] = TenMonHoc(kithi.IDMonHoc.Substring(0,2));
+                    row["Lop"] =  kithi.IDMonHoc.Substring(2);
+                    row["TieuDe"] = kithi.TieuDe;
+                    row["NgayLap"] = kithi.NgayLap;
+                    row["ThoiGian"] = kithi.ThoiGian;
+                    row["SoCau"] = kithi.SoCau;
+                    row["ThiLai"] = kithi.ThiLai;
+                    row["HoatDong"] = kithi.HoatDong;
+                    row["Diem"] = kithi.Diem;
+                    tb.Rows.Add(row); row = null;tb = null;
+                }
+                else
+                {
+                    LoadData();
+                    FormatGrid();
+                }
+            }
+        }
+        public override void LoadData()
+        {
+            base.LoadData();
+            string PostData = "IDGiaoVien={0}";
+            PostData = String.Format(PostData, TGlobal.CurUser.ID);
+            var tb = new TWebsite().GetDataTable("WinApp/DanhSachDeThi", PostData, true);
+            if (tb == null)
+                {
+                    MessageBox.Show("Máy chủ không làm việc hoặc đã hết thời gian làm việc. Đăng nhập lại.");
+                    TGlobal.CurUser = null;
+                    TGlobal.SysEvent.Do_System_Close();
+                }
+            Viewer.DataSource = tb;
+        }
+        public override void Add_Object()
+        {
+            base.Add_Object();
+            FrmExam_Add frm = new FrmExam_Add();
+            frm.ShowDialog();
+            frm = null;          
+        }
+        public override void Repair_Object()
+        {
+            base.Repair_Object();
+            FrmExam_Repair frm = new FrmExam_Repair();
+            frm.ShowDialog();
+            frm = null;
+        }
+    }
+}
