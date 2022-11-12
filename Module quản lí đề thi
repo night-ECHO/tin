@@ -1,0 +1,137 @@
+using BankQuestion.Class;
+using System.Windows.Forms;
+using System.Data;
+using System;
+
+namespace BankQuestion.Forms
+{
+    public partial class FrmExamMatrix : NTCFormBaseData
+    {
+        public FrmExamMatrix()
+        {
+            InitializeComponent();
+        }
+        DataTable _table = null;
+        private string TenMonHoc(string IDMonHoc)
+        {
+            string PostData = "IDMonHoc=" + IDMonHoc;
+            var js = new TWebsite().GetData("WinApp/TenMonHoc", PostData);
+            if (js != null)
+            {
+                if (js.status) return js.data;
+            }
+            return "";
+        }
+        public override void FormatGrid()
+        {
+            base.FormatGrid();
+            if (DeThi.Cols.Count == 0)
+                return;
+            DeThi.Cols["ID"].Visible = false;
+            DeThi.Cols["STT"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.RightCenter;
+            DeThi.Cols["TenMon"].Caption = "Tên môn";
+            DeThi.Cols["TenMon"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.LeftCenter;
+            DeThi.Cols["Lop"].Caption = "Khối";
+            DeThi.Cols["Lop"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.RightCenter;
+            DeThi.Cols["TieuDe"].Caption = "Tên kì thi";
+            DeThi.Cols["TieuDe"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.LeftCenter;
+            DeThi.Cols["NgayLap"].Caption = "Ngày lập";
+            DeThi.Cols["NgayLap"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.CenterCenter;
+
+            DeThi.Cols["ThoiGian"].Caption = "Thời gian làm bài";
+            DeThi.Cols["ThoiGian"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.RightCenter;
+            DeThi.Cols["SoCau"].Caption = "Số câu";
+            DeThi.Cols["SoCau"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.RightCenter;
+            DeThi.Cols["ThiLai"].Caption = "Làm lại";
+            DeThi.Cols["ThiLai"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.RightCenter;
+            DeThi.Cols["ThiLai"].DataType = typeof(bool);
+            DeThi.Cols["HoatDong"].Caption = "Hoạt động";
+            DeThi.Cols["HoatDong"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.RightCenter;
+            DeThi.Cols["HoatDong"].DataType = typeof(bool);
+            DeThi.Cols["Diem"].Caption = "Điểm";
+            DeThi.Cols["Diem"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.RightCenter;
+            var colw = new int[] { 44, 69, 45, 708, 82, 120, 60, 56, 79, 52, 36 };
+            for (int i = 0; i < colw.Length; i++)
+            {
+                if (i > DeThi.Cols["NgayLap"].Index) DeThi.Cols[i].Visible = false;
+                if (i != DeThi.Cols["TieuDe"].Index) DeThi.Cols[i].Width = colw[i];
+                else continue;
+            }
+        }
+        public override void GrdResize()
+        {
+            base.GrdResize();
+            if (DeThi.Width > DeThi.Cols[0].Width + DeThi.Cols[1].Width + DeThi.Cols[2].Width + DeThi.Cols[4].Width + 10)
+                DeThi.Cols[3].Width = DeThi.Width - (DeThi.Cols[0].Width + DeThi.Cols[1].Width + DeThi.Cols[2].Width + DeThi.Cols[4].Width + 10);
+        }
+        public override void LoadData()
+        {
+            base.LoadData();
+            string PostData = "IDGiaoVien={0}";
+            PostData = String.Format(PostData, TGlobal.CurUser.ID);
+            var tw = new TWebsite();
+            var tb = tw.GetDataTable("WinApp/DanhSachDeThi", PostData, true);
+            if (tb == null)
+            {
+                MessageBox.Show("Máy chủ không làm việc hoặc đã hết thời gian làm việc. Đăng nhập lại.");
+                TGlobal.CurUser = null;
+                TGlobal.SysEvent.Do_System_Close();
+            }
+            DeThi.DataSource = tb;
+            PostData = "";
+            _table = tw.GetDataTable("WinApp/ListAllMonHoc", PostData, false);
+        }
+        public override void Add_Object()
+        {
+            base.Add_Object();
+            if (_table == null) return;
+            if (DeThi.Row < 1 || DeThi.Row > DeThi.Rows.Count - 1) return;
+            long IDKiThi = long.Parse(DeThi.Rows[DeThi.Row]["ID"].ToString());
+            string IDMonHoc ="";
+            for(int i=0; i<_table.Rows.Count;i++)
+                if(_table.Rows[i]["TenMon"].ToString()== DeThi.Rows[DeThi.Row]["TenMon"].ToString())
+                {
+                    IDMonHoc = String.Format("{0}{1}",_table.Rows[i]["ID"].ToString(), DeThi.Rows[DeThi.Row]["Lop"].ToString());  break;
+                }
+            if (IDMonHoc == "") return;
+            FrmExamMatrix_Add frm = new FrmExamMatrix_Add();
+            frm.IDKiThi = IDKiThi;
+            frm.IDMonHoc = IDMonHoc;
+            frm.ShowDialog();
+            frm = null;
+        }
+        private void DeThi_RowColChange(object sender, EventArgs e)
+        {
+            if (DeThi.Row < 1 || DeThi.Row > DeThi.Rows.Count - 1||DeThi.Cols.Count<9) return;
+            long IDKiThi = long.Parse(DeThi.Rows[DeThi.Row]["ID"].ToString());
+
+            string PostData = "IDGiaoVien={0}&IDKiThi={1}";
+            PostData = String.Format(PostData, TGlobal.CurUser.ID,IDKiThi);
+            var tw = new TWebsite();
+            var tb = tw.GetDataTable("WinApp/MaTranGet", PostData, true);
+            if (tb == null)
+            {
+                MessageBox.Show("Máy chủ không làm việc hoặc đã hết thời gian làm việc. Đăng nhập lại.");
+                TGlobal.CurUser = null;
+                TGlobal.SysEvent.Do_System_Close();
+            }
+            MaTran.DataSource = tb;
+            FormatMatran();
+        }
+        private void FormatMatran()
+        {
+            if (MaTran.Cols.Count < 7) return;
+            MaTran.Cols["ID"].Visible = false;
+            MaTran.Cols["MoTa"].Caption = "Nội dung";
+            MaTran.Cols["NhanBiet"].Caption = "Nhật biết";
+            MaTran.Cols["NhanBiet"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.RightCenter;
+            MaTran.Cols["ThongHieu"].Caption = "Thông hiểu";
+            MaTran.Cols["ThongHieu"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.RightCenter;
+            MaTran.Cols["VanDung"].Caption = "Vận dụng";
+            MaTran.Cols["VanDung"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.RightCenter;
+            MaTran.Cols["VanDungCao"].Caption = "Vận dụng cao";
+            MaTran.Cols["VanDungCao"].TextAlign = C1.Win.C1FlexGrid.TextAlignEnum.RightCenter;
+            MaTran.AutoSizeCols();
+        }
+    }
+}
